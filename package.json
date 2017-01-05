@@ -1,0 +1,14 @@
+{
+  "name": "sii_download",
+  "version": "0.0.1",
+  "description": "Download data from sii",
+  "main": "program.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Fran",
+  "license": "MIT",
+  "dependencies": {
+    "nightmare": "^2.9.1"
+  }
+}
