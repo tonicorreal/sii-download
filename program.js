@@ -8,33 +8,42 @@
 var Nightmare = require('nightmare');
 var vo = require('vo');
 
-vo(run)(function(err, results) {
-  if (err) console.log(err);
+const reqParams = {
+  rutUsr: '162832999',
+  passUsr: '2565',
+  rutEmp: '76414521',
+  dvEmp: '6'
+};
 
-  docsParams = results;
-});
+// vo(run)(function(err, results) {
+//   if (err) console.log(err);
+//
+//   docsParams = results;
+// });
 
-function * run() {
+run(reqParams);
+
+function run(reqParams) {
+  const { rutUsr, passUsr, rutEmp, dvEmp } = reqParams;
+  let output = {};
   var nightmare = Nightmare({ show: true });
-
   const userAuthUrl =
     'https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html';
-
   const companyIdUrl =
     'https://www1.sii.cl/cgi-bin/Portal001/auth.cgi';
 
-  const result = yield nightmare
+  nightmare
     .goto(userAuthUrl + '?' + companyIdUrl)
     .type('form[action*="/cgi_AUT2000/CAutInicio.cgi"] [name=rutcntr]',
-      '162832999')
+      rutUsr)
     .type('form[action*="/cgi_AUT2000/CAutInicio.cgi"] [name=clave]',
-      '2565')
+      passUsr)
     .click('form#myform button')
     .wait('form[action*="../../cgi-bin/Portal001/lista_documentos.cgi')
     .wait('input[name=RUT_EMP]')
     .wait(1000)
-    .type('input[name=RUT_EMP]', '76414521')
-    .type('input[name=DV_EMP]', '6')
+    .type('input[name=RUT_EMP]', rutEmp)
+    .type('input[name=DV_EMP]', dvEmp)
     .click('input[type=submit][value=Enviar]')
     .wait('select#sel_origen')
     .wait(1000)
@@ -59,11 +68,16 @@ function * run() {
           .match(/\d+/g)[1]
         );
       return docsParams;
+    })
+    .then(function(docsParams) {
+      output['docsParams'] = docsParams;
+      console.log('Retrieved table params to start download... \n', output);
+
+      return nightmare.end();
+    })
+    .catch(function(error) {
+      console.log(error);
     });
-
-  yield nightmare.end();
-
-  return result;
 }
 
 const parseResult = (string) => {
