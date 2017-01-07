@@ -5,8 +5,16 @@
 
 'use strict';
 
+/*
+ * Module Dependencies
+ */
+
 var Nightmare = require('nightmare');
 var vo = require('vo');
+
+/*
+ * API Request Params
+ */
 
 const reqParams = {
   rutUsr: '162832999',
@@ -21,7 +29,9 @@ const reqParams = {
 //   docsParams = results;
 // });
 
-run(reqParams);
+/*
+ * Main Scraping Function
+ */
 
 function run(reqParams) {
   const { rutUsr, passUsr, rutEmp, dvEmp } = reqParams;
@@ -80,11 +90,28 @@ function run(reqParams) {
     });
 }
 
-const parseResult = (string) => {
+/*
+ * Helper Parser Function
+ * Parses specific Table from SII ('table.KnockoutFormTABLE').
+ */
+
+const parseKnockoutFormTABLE = (string) => {
+
+  // 'string' param will be a multiline string.
+  // First line of string contains table headers.
+
+  // Split 'string' into array of lines
   const lines = string.split(/\r?\n/);
+
+  // Split 'tabs' to get table headers and use them as
+  // object keys
   const keys = lines[0].split(/\t/);
+
+  // 'result' array will hold objects of data from rows
+  // in the table
   const result = [];
 
+  // Loop over string lines and parse data into 'result'
   for (let i = 1; i < lines.length - 1; i++) {
     const a = {};
     keys.forEach((key, j) => {
@@ -95,3 +122,6 @@ const parseResult = (string) => {
   }
   return result;
 };
+
+// Run Main Scraper Function
+run(reqParams);
