@@ -8,14 +8,24 @@
 /*
  * Module Dependencies
  */
+const Nightmare = require('nightmare');
+const vo = require('vo');
 
-var Nightmare = require('nightmare');
-var vo = require('vo');
+/*
+ * Nightmare instantiation & config
+ */
+const nightmareTimeouts = 15000;
+const nightmare = Nightmare({
+  show: true,
+  waitTimeout: nightmareTimeouts,
+  loadTimeout: nightmareTimeouts,
+  gotoTimout: nightmareTimeouts,
+  executionTimeout: nightmareTimeouts,
+});
 
 /*
  * API Request Params
  */
-
 const reqParams = {
   rutUsr: '162832999',
   passUsr: '2565',
@@ -23,25 +33,28 @@ const reqParams = {
   dvEmp: '6'
 };
 
-// vo(run)(function(err, results) {
-//   if (err) console.log(err);
-//
-//   docsParams = results;
-// });
+/*
+ * Output variable
+ */
+
+let output = {};
 
 /*
  * Main Scraping Function
  */
-
 function run(reqParams) {
+  // Parse params into local variables
   const { rutUsr, passUsr, rutEmp, dvEmp } = reqParams;
-  let output = {};
-  var nightmare = Nightmare({ show: true });
+
+
+
+  // SII specific urls to navigate
   const userAuthUrl =
     'https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html';
   const companyIdUrl =
     'https://www1.sii.cl/cgi-bin/Portal001/auth.cgi';
 
+  // Navigate to DTE list passing through authentication with user creds
   nightmare
     .goto(userAuthUrl + '?' + companyIdUrl)
     .type('form[action*="/cgi_AUT2000/CAutInicio.cgi"] [name=rutcntr]',
@@ -60,7 +73,9 @@ function run(reqParams) {
     .select('select#sel_origen', 'ENV')
     .click('input[name=BTN_SUBMIT]')
     .wait('table.KnockoutFormTABLE')
-    .wait(1000)
+    .wait(500)
+
+    // Get total number of DTEs (documents) and pagination details
     .evaluate(function() {
       const docsParams = {};
       docsParams['totalDocs'] =
@@ -79,11 +94,29 @@ function run(reqParams) {
         );
       return docsParams;
     })
+
+    // Retrieve DTEs based on params obtained from previous function
     .then(function(docsParams) {
       output['docsParams'] = docsParams;
+      output['DTEs'] = [];
       console.log('Retrieved table params to start download... \n', output);
+    })
+    .then(function() {
+      console.log(`Looping over ${output.docsParams.totalPages} table pages`);
 
-      return nightmare.end();
+      vo(getDTETablePage)('table.KnockoutFormTABLE', function(err, result) {
+        if (err) {
+          console.error('An error ocurred: \n', err);
+        }
+
+        output.DTEs = output.DTEs.concat(parseKnockoutFormTABLE(result));
+        console.log('OUTPUT: ', output);
+      });
+
+    }).
+    then(function() {
+      console.log('Ending Nightmare...');
+      // return nightmare.end();
     })
     .catch(function(error) {
       console.log(error);
@@ -91,11 +124,28 @@ function run(reqParams) {
 }
 
 /*
+ * Page Scraper Generator Function
+ */
+function* getDTETablePage(selector, numberOfPages) {
+  console.log('Getting DTE Table Page with selector', selector);
+
+  const result = yield nightmare
+    .wait(selector)
+    .evaluate(function(selector) {
+      return document.querySelector(selector)
+        .innerText;
+    }, selector);
+
+  return result;
+}
+
+/*
  * Helper Parser Function
  * Parses specific Table from SII ('table.KnockoutFormTABLE').
  */
-
 const parseKnockoutFormTABLE = (string) => {
+  console.log('Parsing table...\n');
+  console.log(string);
 
   // 'string' param will be a multiline string.
   // First line of string contains table headers.
@@ -120,6 +170,8 @@ const parseKnockoutFormTABLE = (string) => {
     });
     result.push(a);
   }
+
+  console.log('Returning parsed table object', result);
   return result;
 };
 
