@@ -9,6 +9,7 @@
   "author": "Fran",
   "license": "MIT",
   "dependencies": {
-    "nightmare": "^2.9.1"
+    "nightmare": "^2.9.1",
+    "vo": "^4.0.2"
   }
 }
