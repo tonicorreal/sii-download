@@ -1,8 +1,3 @@
-// Pagination URL
-// /cgi-bin/Portal001/lista_documentos.cgi?ORDEN=&NUM_PAG=1&RUT_
-// RECP=&FOLIO=&FOLIOHASTA=&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=
-// &ESTADO=&RUT_EMP=76414521&DV_EMP=6&TPO_ARCHIVO=dte&ORIGEN=ENV
-
 'use strict';
 
 /*
@@ -14,7 +9,7 @@ const vo = require('vo');
 /*
  * Nightmare instantiation & config
  */
-const nightmareTimeouts = 15000;
+const nightmareTimeouts = 30000;
 const nightmare = Nightmare({
   show: true,
   waitTimeout: nightmareTimeouts,
@@ -33,20 +28,27 @@ const reqParams = {
   dvEmp: '6'
 };
 
+vo(run(reqParams))(function(err, result) {
+  if (err) throw err;
+
+  console.log('DTEs downloaded in JSON format: ', output);
+});
+
 /*
  * Output variable
  */
-
-let output = {};
+let output = { DTEs: [] };
 
 /*
  * Main Scraping Function
  */
-function run(reqParams) {
+function* run(reqParams) {
   // Parse params into local variables
   const { rutUsr, passUsr, rutEmp, dvEmp } = reqParams;
 
-
+  let currentPage = 1,
+    nextPageExists = true,
+    nextPageURI = '';
 
   // SII specific urls to navigate
   const userAuthUrl =
@@ -55,7 +57,7 @@ function run(reqParams) {
     'https://www1.sii.cl/cgi-bin/Portal001/auth.cgi';
 
   // Navigate to DTE list passing through authentication with user creds
-  nightmare
+  yield nightmare
     .goto(userAuthUrl + '?' + companyIdUrl)
     .type('form[action*="/cgi_AUT2000/CAutInicio.cgi"] [name=rutcntr]',
       rutUsr)
@@ -73,70 +75,44 @@ function run(reqParams) {
     .select('select#sel_origen', 'ENV')
     .click('input[name=BTN_SUBMIT]')
     .wait('table.KnockoutFormTABLE')
-    .wait(500)
+    .wait(500);
 
-    // Get total number of DTEs (documents) and pagination details
-    .evaluate(function() {
-      const docsParams = {};
-      docsParams['totalDocs'] =
-        Number(
-          document.querySelector('div#cant_reg').getAttribute('value')
-        );
-      docsParams['currentPage'] =
-        Number(
-          document.querySelector('td.KnockoutFooterTD').innerText
-          .match(/\d+/g)[0]
-        );
-      docsParams['totalPages'] =
-        Number(
-          document.querySelector('td.KnockoutFooterTD').innerText
-          .match(/\d+/g)[1]
-        );
-      return docsParams;
-    })
+  // Loop over table pages until there's no 'next' link visible.
+  while (nextPageExists) {
+    console.log(`Downloading page ${currentPage}`);
 
-    // Retrieve DTEs based on params obtained from previous function
-    .then(function(docsParams) {
-      output['docsParams'] = docsParams;
-      output['DTEs'] = [];
-      console.log('Retrieved table params to start download... \n', output);
-    })
-    .then(function() {
-      console.log(`Looping over ${output.docsParams.totalPages} table pages`);
+    // Save DTEs in output array
+    output.DTEs = output.DTEs.concat(
+      parseKnockoutFormTABLE(
+        yield nightmare
+          .evaluate(function() {
+            return document.querySelector('table.KnockoutFormTABLE')
+              .innerText;
+          })));
 
-      vo(getDTETablePage)('table.KnockoutFormTABLE', function(err, result) {
-        if (err) {
-          console.error('An error ocurred: \n', err);
-        }
+    console.log(`${output.DTEs.length} DTEs saved`);
 
-        output.DTEs = output.DTEs.concat(parseKnockoutFormTABLE(result));
-        console.log('OUTPUT: ', output);
+    nextPageExists = yield nightmare
+      .visible('td.KnockoutFooterTD img[src="/Portal001/Themes/Knockout/NextOn.gif"]');
+
+    if (nextPageExists) {
+      // Determine URI of 'next' link
+      nextPageURI = yield nightmare.evaluate(function() {
+        return document.querySelector(
+          'td.KnockoutFooterTD img[src="/Portal001/Themes/Knockout/NextOn.gif"]'
+        ).parentNode.href;
       });
 
-    }).
-    then(function() {
-      console.log('Ending Nightmare...');
-      // return nightmare.end();
-    })
-    .catch(function(error) {
-      console.log(error);
-    });
-}
+      // Goto next page
+      yield nightmare
+        .goto(nextPageURI)
+        .wait('table.KnockoutFormTABLE');
 
-/*
- * Page Scraper Generator Function
- */
-function* getDTETablePage(selector, numberOfPages) {
-  console.log('Getting DTE Table Page with selector', selector);
+      currentPage++;
+    }
+  }
 
-  const result = yield nightmare
-    .wait(selector)
-    .evaluate(function(selector) {
-      return document.querySelector(selector)
-        .innerText;
-    }, selector);
-
-  return result;
+  yield nightmare.end();
 }
 
 /*
@@ -144,9 +120,6 @@ function* getDTETablePage(selector, numberOfPages) {
  * Parses specific Table from SII ('table.KnockoutFormTABLE').
  */
 const parseKnockoutFormTABLE = (string) => {
-  console.log('Parsing table...\n');
-  console.log(string);
-
   // 'string' param will be a multiline string.
   // First line of string contains table headers.
 
@@ -171,9 +144,5 @@ const parseKnockoutFormTABLE = (string) => {
     result.push(a);
   }
 
-  console.log('Returning parsed table object', result);
   return result;
 };
-
-// Run Main Scraper Function
-run(reqParams);
