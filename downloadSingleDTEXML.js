@@ -30,7 +30,7 @@ const reqParams = {
   origin: 'ENV',
   docType: '33',
   lastDTEId: '60',
-  folio: '200'
+  folio: '500'
 };
 
 // Vo runs generator function, which basically returns a JSON object
@@ -86,8 +86,12 @@ function* downloadDTE_XML(reqParams) {
       return data;
     }, xmlUrl)
     .then(function(data) {
-      console.log('Writing file...');
-      fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
+      console.log('Received data:', data);
+      if (data.toString().search('Error al contrib')) {
+        console.log(`No XML for requested docType/folio: ${docType}/${folio}`);
+      } else {
+        fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
+      }
     });
 
   yield nightmare.end();
