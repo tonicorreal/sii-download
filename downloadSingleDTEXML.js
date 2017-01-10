@@ -46,7 +46,7 @@ vo(downloadDTE_XML(reqParams))(function(err, result) {
  * 1. Tráeme los DTEs enviados de tal tipo, el último que tengo es el 60...
  */
 function* downloadDTE_XML(reqParams) {
-  // Parse params into local variables
+  // Parse request params into local variables
   const { rutUsr, passUsr, rutEmp,
     dvEmp, origin, docType, folio } = reqParams;
 
@@ -74,8 +74,13 @@ function* downloadDTE_XML(reqParams) {
     .type('input[name=DV_EMP]', dvEmp)
     .click('input[type=submit][value=Enviar]')
     .wait('select#sel_origen')
-    .wait()
-    .evaluate(function(xmlUrl) {
+    .wait();
+
+  let nextDTEExists = true;
+
+  // Loop until all DTEs have been downloaded
+  while (nextDTEExists) {
+    yield nightmare.evaluate(function(xmlUrl) {
       const data = [];
       const xhr = new XMLHttpRequest();
 
@@ -85,14 +90,16 @@ function* downloadDTE_XML(reqParams) {
       data.push(xhr.responseText);
       return data;
     }, xmlUrl)
-    .then(function(data) {
-      console.log('Received data:', data);
-      if (data.toString().search('Error al contrib')) {
-        console.log(`No XML for requested docType/folio: ${docType}/${folio}`);
-      } else {
-        fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
-      }
-    });
-
+      .then(function(data) {
+        console.log('Received data:', data);
+        if (data.toString().search('Error al contrib')) {
+          console.log(`No XML for requested docType/folio: ${docType}/${folio}`);
+        } else {
+          console.log(`Saved to "./output/${docType}_${folio}.xml"`);
+          fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
+        }
+      });
+  }
+    
   yield nightmare.end();
 }
