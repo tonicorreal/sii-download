@@ -30,12 +30,12 @@ const reqParams = {
   origin: 'ENV',
   docType: '33',
   lastDTEId: '60',
-  folio: '235'
+  folio: '200'
 };
 
 // Vo runs generator function, which basically returns a JSON object
 // with all DTEs (non-XML) found in table
-vo(downloadDTEXML(reqParams))(function(err, result) {
+vo(downloadDTE_XML(reqParams))(function(err, result) {
   if (err) throw err;
 
   console.log('Done');
@@ -45,7 +45,7 @@ vo(downloadDTEXML(reqParams))(function(err, result) {
  * Main Scraping Function
  * 1. Tráeme los DTEs enviados de tal tipo, el último que tengo es el 60...
  */
-function* downloadDTEXML(reqParams) {
+function* downloadDTE_XML(reqParams) {
   // Parse params into local variables
   const { rutUsr, passUsr, rutEmp,
     dvEmp, origin, docType, folio } = reqParams;
