@@ -13,6 +13,9 @@ const fs = require('fs');
 const nightmareTimeouts = 20000;
 const nightmare = Nightmare({
   show: false,
+  openDevTools: {
+    mode: 'detach'
+  },
   waitTimeout: nightmareTimeouts,
   loadTimeout: nightmareTimeouts,
   gotoTimout: nightmareTimeouts,
@@ -30,7 +33,7 @@ const reqParams = {
   origin: 'ENV',
   docType: '33',
   lastDTEId: '60',
-  folio: '500'
+  folio: '40'
 };
 
 // Vo runs generator function, which basically returns a JSON object
@@ -48,7 +51,13 @@ vo(downloadDTE_XML(reqParams))(function(err, result) {
 function* downloadDTE_XML(reqParams) {
   // Parse request params into local variables
   const { rutUsr, passUsr, rutEmp,
-    dvEmp, origin, docType, folio } = reqParams;
+    dvEmp, origin, docType } = reqParams;
+
+  let folio = reqParams.folio;
+
+  const searchLimitForUnexistentDTE = 5;
+  const documentDownloadLimit = 20;
+  let documentsDownloaded = 0;
 
   // SII specific urls to navigate
   const userAuthUrl =
@@ -57,7 +66,9 @@ function* downloadDTE_XML(reqParams) {
     'https://www1.sii.cl/cgi-bin/Portal001/auth.cgi';
 
   // URL that will download a single DTE XML
-  const xmlUrl = `https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=${rutEmp}&DV_EMP=${dvEmp}&ORIGEN=${origin}&RUT_RECP=&FOLIO=${folio}&FOLIOHASTA=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=${docType}&ESTADO=&ORDEN=&DOWNLOAD=XML`;
+  let xmlUrl = `https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=${rutEmp}&DV_EMP=${dvEmp}&ORIGEN=${origin}&RUT_RECP=&FOLIO=${folio}&FOLIOHASTA=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=${docType}&ESTADO=&ORDEN=&DOWNLOAD=XML`;
+
+  console.log('Searching into SII...');
 
   // Navigate to DTE list passing through authentication with user creds
   yield nightmare
@@ -76,9 +87,11 @@ function* downloadDTE_XML(reqParams) {
     .wait('select#sel_origen')
     .wait();
 
-  let nextDTEExists = true;
+  // These will help to keep track when we're not finding XMLs
+  let nextDTEExists = true,
+    countUnexistentFolio = 0;
 
-  // Loop until all DTEs have been downloaded
+  // Loop until all DTEs have been downloaded and saved
   while (nextDTEExists) {
     yield nightmare.evaluate(function(xmlUrl) {
       const data = [];
@@ -91,15 +104,31 @@ function* downloadDTE_XML(reqParams) {
       return data;
     }, xmlUrl)
       .then(function(data) {
-        console.log('Received data:', data);
-        if (data.toString().search('Error al contrib')) {
-          console.log(`No XML for requested docType/folio: ${docType}/${folio}`);
+
+        // If data contains an invalid response, continue with next "folio"
+        if (data.toString().search('Error al contrib') > 0) {
+          console.log(
+            `No XML for requested docType/folio: ${docType}/${folio}`
+          );
+          countUnexistentFolio++;
+          folio++;
+          nextDTEExists = countUnexistentFolio < searchLimitForUnexistentDTE;
+
+        // Else we have found a valid XML. Save it.
         } else {
+
+          // Save file to destination folder
           console.log(`Saved to "./output/${docType}_${folio}.xml"`);
           fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
+
+          // Update counters and xmlURL
+          folio++;
+          documentsDownloaded++;
+          nextDTEExists = documentsDownloaded < documentDownloadLimit;
+          xmlUrl = `https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=${rutEmp}&DV_EMP=${dvEmp}&ORIGEN=${origin}&RUT_RECP=&FOLIO=${folio}&FOLIOHASTA=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=${docType}&ESTADO=&ORDEN=&DOWNLOAD=XML`;
         }
       });
   }
-    
+
   yield nightmare.end();
 }
