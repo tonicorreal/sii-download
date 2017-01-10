@@ -5,6 +5,7 @@
  */
 const Nightmare = require('nightmare');
 const vo = require('vo');
+const fs = require('fs');
 
 /*
  * Nightmare instantiation & config
@@ -25,13 +26,29 @@ const reqParams = {
   rutUsr: '162832999',
   passUsr: '2565',
   rutEmp: '76414521',
-  dvEmp: '6'
+  dvEmp: '6',
+  origin: 'ENV',
+  docType: '33'
 };
 
+// 1. Tráeme los DTEs enviados de tal tipo, el último que tengo es el 60...
+// 2. Saca toda la tabla de recibidos y luego baja de a 1 cada xml
+
+// Vo runs generator function, which basically returns a JSON object
+// with all DTEs
 vo(run(reqParams))(function(err, result) {
   if (err) throw err;
 
   console.log('DTEs downloaded in JSON format: ', output);
+
+  fs.writeFile(`./output/${Date.now()}_output_SII.json`,
+    JSON.stringify(output, null, '\t'), function(err) {
+      if (err) return console.log(err);
+      console.log('Saved in output.json');
+    });
+
+  // https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=76414521&DV_EMP=6&ORIGEN=ENV&RUT_RECP=&FOLIO=255&FOLIOHASTA=255&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=33&ESTADO=&ORDEN=&DOWNLOAD=XML
+
 });
 
 /*
@@ -44,7 +61,7 @@ let output = { DTEs: [] };
  */
 function* run(reqParams) {
   // Parse params into local variables
-  const { rutUsr, passUsr, rutEmp, dvEmp } = reqParams;
+  const { rutUsr, passUsr, rutEmp, dvEmp, origin } = reqParams;
 
   let currentPage = 1,
     nextPageExists = true,
@@ -72,7 +89,7 @@ function* run(reqParams) {
     .click('input[type=submit][value=Enviar]')
     .wait('select#sel_origen')
     .wait(1000)
-    .select('select#sel_origen', 'ENV')
+    .select('select#sel_origen', origin)
     .click('input[name=BTN_SUBMIT]')
     .wait('table.KnockoutFormTABLE')
     .wait(500);
@@ -93,7 +110,9 @@ function* run(reqParams) {
     console.log(`${output.DTEs.length} DTEs saved`);
 
     nextPageExists = yield nightmare
-      .visible('td.KnockoutFooterTD img[src="/Portal001/Themes/Knockout/NextOn.gif"]');
+      .visible(
+        'td.KnockoutFooterTD img[src="/Portal001/Themes/Knockout/NextOn.gif"]'
+      );
 
     if (nextPageExists) {
       // Determine URI of 'next' link
