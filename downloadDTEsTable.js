@@ -6,6 +6,7 @@
 const Nightmare = require('nightmare');
 const vo = require('vo');
 const fs = require('fs');
+const parseKnockoutFormTABLE = require('./parseSiiTable');
 
 /*
  * Nightmare instantiation & config
@@ -81,16 +82,16 @@ function* downloadDTETable(reqParams) {
     .click('form#myform button')
     .wait('form[action*="../../cgi-bin/Portal001/lista_documentos.cgi')
     .wait('input[name=RUT_EMP]')
-    .wait(1000)
+    .wait()
     .type('input[name=RUT_EMP]', rutEmp)
     .type('input[name=DV_EMP]', dvEmp)
     .click('input[type=submit][value=Enviar]')
     .wait('select#sel_origen')
-    .wait(1000)
+    .wait()
     .select('select#sel_origen', origin)
     .click('input[name=BTN_SUBMIT]')
     .wait('table.KnockoutFormTABLE')
-    .wait(500);
+    .wait();
 
   // Loop over table pages until there's no 'next' link visible.
   while (nextPageExists) {
@@ -131,35 +132,3 @@ function* downloadDTETable(reqParams) {
 
   yield nightmare.end();
 }
-
-/*
- * Helper Parser Function
- * Parses specific Table from SII ('table.KnockoutFormTABLE').
- */
-const parseKnockoutFormTABLE = (string) => {
-  // 'string' param will be a multiline string.
-  // First line of string contains table headers.
-
-  // Split 'string' into array of lines
-  const lines = string.split(/\r?\n/);
-
-  // Split 'tabs' to get table headers and use them as
-  // object keys
-  const keys = lines[0].split(/\t/);
-
-  // 'result' array will hold objects of data from rows
-  // in the table
-  const result = [];
-
-  // Loop over string lines and parse data into 'result'
-  for (let i = 1; i < lines.length - 1; i++) {
-    const a = {};
-    keys.forEach((key, j) => {
-      if (key == '') key = 'DV';
-      a[key] = lines[i].split(/\t/)[j];
-    });
-    result.push(a);
-  }
-
-  return result;
-};
