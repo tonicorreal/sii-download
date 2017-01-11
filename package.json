@@ -1,14 +1,19 @@
 {
-  "name": "sii_download",
-  "version": "0.0.1",
+  "name": "sii-dte-download",
+  "version": "0.0.2",
   "description": "Download data from sii",
-  "main": "program.js",
+  "main": "downloadSingleDTEXML.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Fran",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fgdemussy/sii-download.git"
+  },
   "dependencies": {
+    "commander": "^2.9.0",
     "nightmare": "^2.9.1",
     "vo": "^4.0.2"
   }
