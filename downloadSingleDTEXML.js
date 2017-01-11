@@ -22,6 +22,9 @@ program
   .option('-t, --doc-type <n>',
     'Tipo de documento (i.e. [33] para Factura Electronica)', 33)
   .option('-f, --folio <n>', 'Folio documento a buscar')
+  .option('-l, --download-limit <n>', 'Limite numero XMLs a descargar', 20)
+  .option('-n, --not-found-limit <n>',
+   'Limite de documentos no encontrados', 15)
   .parse(process.argv);
 
 // Check that args exist before running program
@@ -58,9 +61,12 @@ const exampleParams = {
   dvEmp: '6',
   origin: 'ENV',
   docType: '33',
-  folio: '40'
+  folio: '200'
 };
 
+/**
+ * Params from command line
+ */
 const argvParams = {
   rutUsr: program.rut,
   passUsr: program.password,
@@ -68,15 +74,17 @@ const argvParams = {
   dvEmp: program.digitoVerifContribuyente,
   origin: program.origenDocumento,
   docType: program.docType,
-  folio: program.folio
+  folio: program.folio,
+  documentDownloadLimit: program.downloadLimit,
+  searchLimitForUnexistentDTE: program.notFoundLimit
 };
 
 // Vo runs generator function, which basically returns a JSON object
 // with all DTEs (non-XML) found in table
-vo(downloadDTE_XML(argvParams))(function(err, result) {
+vo(downloadDTE_XML(argvParams || exampleParams))(function(err, result) {
   if (err) throw err;
 
-  console.log('Done');
+  console.log('Done, thanks for watching');
 });
 
 /**
@@ -85,14 +93,10 @@ vo(downloadDTE_XML(argvParams))(function(err, result) {
  */
 function* downloadDTE_XML(reqParams) {
   // Parse request params into local variables
-  const { rutUsr, passUsr, rutEmp,
-    dvEmp, origin, docType } = reqParams;
+  const { rutUsr, passUsr, rutEmp, dvEmp, origin, docType,
+    documentDownloadLimit, searchLimitForUnexistentDTE } = reqParams;
 
-  let folio = reqParams.folio;
-
-  // DTE search-loop limits
-  const searchLimitForUnexistentDTE = 5;
-  const documentDownloadLimit = 20;
+  let { folio } = reqParams;
   let documentsDownloaded = 0;
 
   // SII specific urls to navigate
@@ -162,8 +166,10 @@ function* downloadDTE_XML(reqParams) {
           folio++;
           documentsDownloaded++;
           nextDTEExists = documentsDownloaded < documentDownloadLimit;
-          xmlUrl = `https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=${rutEmp}&DV_EMP=${dvEmp}&ORIGEN=${origin}&RUT_RECP=&FOLIO=${folio}&FOLIOHASTA=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=${docType}&ESTADO=&ORDEN=&DOWNLOAD=XML`;
         }
+
+        // Update xmlURL to search for next "folio"
+        xmlUrl = `https://www1.sii.cl/cgi-bin/Portal001/download.cgi?RUT_EMP=${rutEmp}&DV_EMP=${dvEmp}&ORIGEN=${origin}&RUT_RECP=&FOLIO=${folio}&FOLIOHASTA=${folio}&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=${docType}&ESTADO=&ORDEN=&DOWNLOAD=XML`;
       });
   }
 
