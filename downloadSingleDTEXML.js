@@ -6,8 +6,34 @@
 const Nightmare = require('nightmare');
 const vo = require('vo');
 const fs = require('fs');
+const program = require('commander');
 
-/*
+/**
+ * Shell command options
+ */
+program
+  .version('0.0.1')
+  .option('-r, --rut <n>', 'RUT usuario SII')
+  .option('-p, --password <value>', 'Password usuario SII')
+  .option('-c, --rut-contribuyente <n>', 'RUT Contribuyente a buscar')
+  .option('-v, --digito-verif-contribuyente <n>', 'DV Contribuyente a buscar')
+  .option('-o, --origen-documento [origen]',
+    'Seleccionar DTEs enviados o recibidos (ENV|RCP) [ENV]', 'ENV')
+  .option('-t, --doc-type <n>',
+    'Tipo de documento (i.e. [33] para Factura Electronica)', 33)
+  .option('-f, --folio <n>', 'Folio documento a buscar')
+  .parse(process.argv);
+
+// Check that args exist before running program
+// otherwise exit program
+if (!(program.rut && program.password &&
+  program.rutContribuyente && program.digitoVerifContribuyente &&
+  program.folio)) {
+  console.error('Please specify all required arguments');
+  process.exit(1);
+}
+
+/**
  * Nightmare instantiation & config
  */
 const nightmareTimeouts = 20000;
@@ -22,29 +48,38 @@ const nightmare = Nightmare({
   executionTimeout: nightmareTimeouts,
 });
 
-/*
- * API Request Params
+/**
+ * "API" Request Params example
  */
-const reqParams = {
+const exampleParams = {
   rutUsr: '162832999',
   passUsr: '2565',
   rutEmp: '76414521',
   dvEmp: '6',
   origin: 'ENV',
   docType: '33',
-  lastDTEId: '60',
   folio: '40'
+};
+
+const argvParams = {
+  rutUsr: program.rut,
+  passUsr: program.password,
+  rutEmp: program.rutContribuyente,
+  dvEmp: program.digitoVerifContribuyente,
+  origin: program.origenDocumento,
+  docType: program.docType,
+  folio: program.folio
 };
 
 // Vo runs generator function, which basically returns a JSON object
 // with all DTEs (non-XML) found in table
-vo(downloadDTE_XML(reqParams))(function(err, result) {
+vo(downloadDTE_XML(argvParams))(function(err, result) {
   if (err) throw err;
 
   console.log('Done');
 });
 
-/*
+/**
  * Main Scraping Function
  * 1. Tráeme los DTEs enviados de tal tipo, el último que tengo es el 60...
  */
@@ -55,6 +90,7 @@ function* downloadDTE_XML(reqParams) {
 
   let folio = reqParams.folio;
 
+  // DTE search-loop limits
   const searchLimitForUnexistentDTE = 5;
   const documentDownloadLimit = 20;
   let documentsDownloaded = 0;
@@ -70,7 +106,7 @@ function* downloadDTE_XML(reqParams) {
 
   console.log('Searching into SII...');
 
-  // Navigate to DTE list passing through authentication with user creds
+  // Login SII & Company selection
   yield nightmare
     .goto(userAuthUrl + '?' + companyIdUrl)
     .type('form[action*="/cgi_AUT2000/CAutInicio.cgi"] [name=rutcntr]',
@@ -105,7 +141,8 @@ function* downloadDTE_XML(reqParams) {
     }, xmlUrl)
       .then(function(data) {
 
-        // If data contains an invalid response, continue with next "folio"
+        /* If response is invalid (no XML found), continue with next "folio"
+         * until search limit is reached */
         if (data.toString().search('Error al contrib') > 0) {
           console.log(
             `No XML for requested docType/folio: ${docType}/${folio}`
@@ -121,7 +158,7 @@ function* downloadDTE_XML(reqParams) {
           console.log(`Saved to "./output/${docType}_${folio}.xml"`);
           fs.writeFileSync(`./output/${docType}_${folio}.xml`, data);
 
-          // Update counters and xmlURL
+          // Update counters and xmlURL to search for next "folio"
           folio++;
           documentsDownloaded++;
           nextDTEExists = documentsDownloaded < documentDownloadLimit;
